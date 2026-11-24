@@ -5,6 +5,44 @@ Each entry is a failure hit during bring-up of this HAT, with the fix that worke
 The five traps that break the board before the radio is at fault are on
 [failed.md](failed.md).
 
+## WiFi never comes up: `brcmf_sdio_bus_rxctl: resumed on timeout`
+
+Symptom in `dmesg`:
+
+```
+brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac43430-sdio for chip BCM43430/1
+brcmfmac: brcmf_sdio_bus_rxctl: resumed on timeout
+ieee80211 phy0: brcmf_attach: dongle is not responding: err=-110
+```
+
+The chip is fine and the firmware download starts; the **nvram file is wrong**. This
+board's module is an AP6212 (BCM43430), and the Raspberry Pi 3 nvram — commonly copied
+across as `brcmfmac43430-sdio.radxa,rockpi4b-plus.txt` — is byte-identical in size and
+the dongle rejects it. Point both board files at the generic upstream pair instead:
+
+```bash
+cd /lib/firmware/brcm
+cp -n 'brcmfmac43430-sdio.radxa,rockpi4b-plus.bin' /root/ 2>/dev/null
+cp -n 'brcmfmac43430-sdio.radxa,rockpi4b-plus.txt' /root/ 2>/dev/null
+ln -sf brcmfmac43430-sdio.bin 'brcmfmac43430-sdio.radxa,rockpi4b-plus.bin'
+ln -sf brcmfmac43430-sdio.txt 'brcmfmac43430-sdio.radxa,rockpi4b-plus.txt'
+reboot
+```
+
+**Pass condition** — `wlan0` exists and `dmesg` shows the firmware banner:
+
+```
+brcmfmac: brcmf_c_preinit_dcmds: Firmware: BCM43430/1 wl0: Mar 30 2021 … version 7.45.98.118
+```
+
+`ip -br link` then lists `wlan0` (DOWN until you configure it). Check what you are
+actually running before blaming the module:
+
+```bash
+cmp -s '/lib/firmware/brcm/brcmfmac43430-sdio.radxa,rockpi4b-plus.txt' \
+       '/lib/firmware/brcm/brcmfmac43430-sdio.raspberrypi,3-model-b.txt' && echo "RPi nvram copied"
+```
+
 ## `ModuleNotFoundError: No module named 'spidev'`
 
 The packages were never installed — a fresh Armbian has no `spidev` module. Do not
